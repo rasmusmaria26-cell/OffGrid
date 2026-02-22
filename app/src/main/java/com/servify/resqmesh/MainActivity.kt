@@ -14,8 +14,19 @@ import com.servify.resqmesh.ui.theme.OffGridTheme
 
 class MainActivity : ComponentActivity() {
 
-    private val nearbyManager by lazy { 
-        NearbyManager(this, "") 
+    companion object {
+        private const val PREFS_NAME = "offgrid_prefs"
+        private const val KEY_USERNAME = "username"
+    }
+
+    private val prefs by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
+
+    private val nearbyManager by lazy {
+        // Load persisted name, or generate a fresh one if first launch
+        val savedName = prefs.getString(KEY_USERNAME, "")
+        val name = if (!savedName.isNullOrBlank()) savedName
+                   else NearbyManager.generateNickname()
+        NearbyManager(this, name)
     }
 
     private val requestPermissionsLauncher = registerForActivityResult(
@@ -30,11 +41,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         checkAndRequestPermissions()
 
         setContent {
-            OffGridApp(nearbyManager)
+            OffGridApp(
+                nearbyManager = nearbyManager,
+                onNameConfirmed = { name ->
+                    // Persist name to SharedPreferences whenever user confirms on onboarding
+                    prefs.edit().putString(KEY_USERNAME, name).apply()
+                }
+            )
         }
     }
 

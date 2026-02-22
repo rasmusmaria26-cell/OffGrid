@@ -1,5 +1,9 @@
 package com.servify.resqmesh.ui.screens
 
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,16 +35,42 @@ fun EmergencyScreen(
 ) {
     val connectedPeers by nearbyManager.connectedPeers.collectAsState()
     var isSent by remember { mutableStateOf(false) }
-    
-    val infiniteTransition = rememberInfiniteTransition()
+    val context = LocalContext.current
+
+    val infiniteTransition = rememberInfiniteTransition(label = "sosPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 1.2f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
-        )
+        ),
+        label = "pulseScale"
     )
+
+    // Haptic helper
+    fun triggerSosHaptic() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(VibratorManager::class.java)
+                vibratorManager?.defaultVibrator?.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 200, 100, 200, 100, 500),
+                        intArrayOf(0, 255, 0, 255, 0, 200),
+                        -1
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = context.getSystemService(Vibrator::class.java)
+                vibrator?.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 200, 100, 200, 100, 500), -1
+                    )
+                )
+            }
+        } catch (e: Exception) { /* Vibrator not available on some devices */ }
+    }
 
     Scaffold(
         topBar = {
@@ -68,7 +99,10 @@ fun EmergencyScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "This will broadcast your location to all nearby nodes instantly.",
+                text = if (connectedPeers.isEmpty())
+                    "Start the mesh on the Radar screen first to alert nearby nodes."
+                else
+                    "This will broadcast an SOS to all ${connectedPeers.size} connected nodes instantly.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.Gray,
                 textAlign = TextAlign.Center,
@@ -89,27 +123,45 @@ fun EmergencyScreen(
                     )
                 }
 
-                // Main Button
+                // SOS Button
                 Surface(
                     modifier = Modifier
                         .size(160.dp)
-                        .scale(pulseScale)
+                        .scale(if (isSent) 1f else pulseScale)
                         .clip(CircleShape)
-                        .clickable { 
-                            nearbyManager.sendMessage("🚨 EMERGENCY SOS - Location Shared", true)
+                        .clickable(enabled = !isSent) {
+                            nearbyManager.sendMessage("🚨 EMERGENCY SOS — Needs immediate help!", true)
                             isSent = true
+                            triggerSosHaptic()
                         },
-                    color = Color(0xFFFF4500),
+                    color = if (isSent) Color(0xFF8B0000) else Color(0xFFFF4500),
                     shape = CircleShape,
                     shadowElevation = 12.dp
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "SOS",
-                            modifier = Modifier.size(64.dp),
-                            tint = Color.White
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "SOS",
+                                modifier = Modifier.size(48.dp),
+                                tint = Color.White
+                            )
+                            if (isSent) {
+                                Text(
+                                    "SENT",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black
+                                )
+                            } else {
+                                Text(
+                                    "SOS",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -127,15 +179,21 @@ fun EmergencyScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            "SOS SENT",
+                            "🚨  SOS BROADCAST SENT",
                             style = MaterialTheme.typography.headlineSmall,
                             color = Color(0xFFFF4500),
                             fontWeight = FontWeight.Black
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "${connectedPeers.size} nodes alerted — 📍 GPS attached",
+                            "${connectedPeers.size} node${if (connectedPeers.size != 1) "s" else ""} alerted",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White
+                        )
+                        Text(
+                            "Message is relaying across the mesh",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray
                         )
                     }
                 }

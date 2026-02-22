@@ -34,7 +34,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 }
 
 @Composable
-fun OffGridApp(nearbyManager: NearbyManager) {
+fun OffGridApp(nearbyManager: NearbyManager, onNameConfirmed: (String) -> Unit = {}) {
     val navController = rememberNavController()
     val mode by nearbyManager.mode.collectAsState()
     val emergencyAlert by nearbyManager.emergencyAlert.collectAsState()
@@ -80,6 +80,7 @@ fun OffGridApp(nearbyManager: NearbyManager) {
                 ) {
                     composable("onboarding") {
                         OnboardingScreen(nearbyManager, onFinish = {
+                            onNameConfirmed(nearbyManager.userName)
                             navController.navigate("home") {
                                 popUpTo("onboarding") { inclusive = true }
                             }

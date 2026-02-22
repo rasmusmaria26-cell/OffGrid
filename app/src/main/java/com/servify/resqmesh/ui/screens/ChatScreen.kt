@@ -1,5 +1,8 @@
 package com.servify.resqmesh.ui.screens
 
+import android.annotation.SuppressLint
+import android.location.Location
+import android.location.LocationManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +40,7 @@ fun ChatScreen(
     var text by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
+    val context = LocalContext.current
 
     // ── Peer Picker State ─────────────────────────────────────────────────────
     var selectedPeer by remember { mutableStateOf<String?>(null) } // null = broadcast
@@ -157,7 +162,7 @@ fun ChatScreen(
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
-                        text = { Text("Groups") }
+                        text = { Text("🔒 DMs") }
                     )
                 }
             }
@@ -177,7 +182,11 @@ fun ChatScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
-                items(messages) { msg ->
+                val tabMessages = if (selectedTab == 0)
+                    messages.filter { !it.isDirect }
+                else
+                    messages.filter { it.isDirect }
+                items(tabMessages) { msg ->
                     ChatBubble(
                         msg = msg,
                         isMe = msg.sender == nearbyManager.userName,
@@ -186,8 +195,8 @@ fun ChatScreen(
                 }
             }
 
-            // Quick Actions Bar (Festival mode only)
-            if (mode == OffGridMode.FESTIVAL && selectedPeer == null) {
+            // Quick Actions Bar (Festival mode only, Nearby tab, broadcast mode)
+            if (mode == OffGridMode.FESTIVAL && selectedPeer == null && selectedTab == 0) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -195,8 +204,20 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.Start
                 ) {
                     AssistChip(
-                        onClick = { nearbyManager.sendMessage("📍 At the Main Stage", false) },
-                        label = { Text("Where am I?") },
+                        onClick = {
+                            @SuppressLint("MissingPermission")
+                            val loc: Location? = try {
+                                val lm = context.getSystemService(LocationManager::class.java)
+                                lm?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                                    ?: lm?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                            } catch (e: Exception) { null }
+                            val locationStr = if (loc != null)
+                                "📍 My location: %.4f, %.4f".format(loc.latitude, loc.longitude)
+                            else
+                                "📍 At the Main Stage (GPS unavailable)"
+                            nearbyManager.sendMessage(locationStr, false)
+                        },
+                        label = { Text("Share Location") },
                         leadingIcon = { Icon(Icons.Default.LocationOn, null, Modifier.size(16.dp)) },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = Color(0xFF1A1A1A),

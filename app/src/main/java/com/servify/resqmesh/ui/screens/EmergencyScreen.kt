@@ -1,33 +1,63 @@
 package com.servify.resqmesh.ui.screens
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.servify.resqmesh.NearbyManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmergencyScreen(nearbyManager: NearbyManager, onNavigateBack: () -> Unit) {
+fun EmergencyScreen(
+    nearbyManager: NearbyManager,
+    onNavigateBack: () -> Unit
+) {
+    val connectedPeers by nearbyManager.connectedPeers.collectAsState()
+    var isSent by remember { mutableStateOf(false) }
+    
+    val infiniteTransition = rememberInfiniteTransition()
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Emergency Alert") },
+                title = { Text("Emergency SOS", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF0F0F0F),
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White
+                )
             )
-        }
+        },
+        containerColor = Color(0xFF0F0F0F)
     ) { padding ->
         Column(
             modifier = Modifier
@@ -38,30 +68,78 @@ fun EmergencyScreen(nearbyManager: NearbyManager, onNavigateBack: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "TAP BUTTON TO BROADCAST EMERGENCY",
-                style = MaterialTheme.typography.headlineMedium,
+                text = "This will broadcast your location to all nearby nodes instantly.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray,
                 textAlign = TextAlign.Center,
-                color = Color.Red
+                modifier = Modifier.padding(bottom = 48.dp)
             )
-            
-            Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = { nearbyManager.sendMessage("EMERGENCY SIGNAL FROM " + android.os.Build.MODEL, isEmergency = true) },
-                modifier = Modifier.size(200.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(300.dp)
             ) {
-                Icon(Icons.Default.Warning, contentDescription = "SOS", modifier = Modifier.size(80.dp), tint = Color.White)
+                // Outer glow rings
+                repeat(3) { i ->
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp + (i * 40).dp)
+                            .scale(pulseScale)
+                            .border(2.dp, Color(0xFFFF4500).copy(alpha = 0.3f / (i + 1)), CircleShape)
+                    )
+                }
+
+                // Main Button
+                Surface(
+                    modifier = Modifier
+                        .size(160.dp)
+                        .scale(pulseScale)
+                        .clip(CircleShape)
+                        .clickable { 
+                            nearbyManager.sendMessage("🚨 EMERGENCY SOS - Location Shared", true)
+                            isSent = true
+                        },
+                    color = Color(0xFFFF4500),
+                    shape = CircleShape,
+                    shadowElevation = 12.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "SOS",
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(48.dp))
 
-            Text(
-                "This will send an alert to all nearby devices in the mesh network.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center
-            )
+            if (isSent) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1A1A1A),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "SOS SENT",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color(0xFFFF4500),
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            "${connectedPeers.size} nodes alerted — 📍 GPS attached",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         }
     }
 }

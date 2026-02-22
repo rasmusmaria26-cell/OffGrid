@@ -1,19 +1,44 @@
 package com.servify.resqmesh
 
-            import android.content.Context
-            import android.util.Log
-            import com.google.android.gms.nearby.Nearby
-            import com.google.android.gms.nearby.connection.*
-            import kotlinx.coroutines.flow.MutableStateFlow
-            import kotlinx.coroutines.flow.asStateFlow
-            import org.json.JSONObject
-            import java.util.*
+import android.content.Context
+import android.util.Log
+import com.google.android.gms.nearby.Nearby
+import com.google.android.gms.nearby.connection.*
+import com.servify.resqmesh.ui.theme.OffGridMode
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
+import java.util.*
 
-            class NearbyManager(private val context: Context, private val userName: String) {
+class NearbyManager(private val context: Context, var userName: String) {
+
+    companion object {
+        fun generateNickname(): String {
+            val colors = listOf("Blue", "Red", "Green", "Electric", "Dark", "Neon", "Silent", "Rapid")
+            val animals = listOf("Fox", "Wolf", "Hawk", "Bear", "Lynx", "Eagle", "Panther", "Tiger")
+            val color = colors.random()
+            val animal = animals.random()
+            val id = (1000..9999).random()
+            return "$color$animal #$id"
+        }
+    }
+
+    init {
+        if (userName.isBlank()) {
+            userName = generateNickname()
+        }
+    }
 
     private val connectionsClient = Nearby.getConnectionsClient(context)
     private val SERVICE_ID = "com.servify.resqmesh.SERVICE_ID"
     private val STRATEGY = Strategy.P2P_CLUSTER
+
+    private val _mode = MutableStateFlow(OffGridMode.FESTIVAL)
+    val mode = _mode.asStateFlow()
+
+    fun setMode(mode: OffGridMode) {
+        _mode.value = mode
+    }
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning = _isScanning.asStateFlow()
@@ -25,6 +50,13 @@ package com.servify.resqmesh
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages = _messages.asStateFlow()
+
+    private val _emergencyAlert = MutableStateFlow<ChatMessage?>(null)
+    val emergencyAlert = _emergencyAlert.asStateFlow()
+
+    fun dismissEmergency() {
+        _emergencyAlert.value = null
+    }
 
     private val seenMessageIds = mutableSetOf<String>()
 
@@ -150,13 +182,19 @@ package com.servify.resqmesh
             val content = json.getString("content")
             val type = json.getString("type")
             val destination = json.optString("destination", "BROADCAST")
+            val hops = json.optInt("hops", 0)
 
-            val chatMsg = ChatMessage(msgId, sender, content, type == "EMERGENCY")
+            val chatMsg = ChatMessage(msgId, sender, content, type == "EMERGENCY", hops)
             _messages.value = _messages.value + chatMsg
 
-            // Relay logic
+            if (type == "EMERGENCY" && sender != userName) {
+                _emergencyAlert.value = chatMsg
+            }
+
+            // Relay logic: Increment hops before sending further
             if (destination == "BROADCAST" || destination != userName) {
-                relayMessage(data, fromEndpointId)
+                json.put("hops", hops + 1)
+                relayMessage(json.toString(), fromEndpointId)
             }
 
         } catch (e: Exception) {
@@ -181,10 +219,11 @@ package com.servify.resqmesh
             put("content", content)
             put("type", if (isEmergency) "EMERGENCY" else "TEXT")
             put("destination", "BROADCAST")
+            put("hops", 0)
         }
         
         val data = json.toString()
-        val chatMsg = ChatMessage(msgId, userName, content, isEmergency)
+        val chatMsg = ChatMessage(msgId, userName, content, isEmergency, 0)
         _messages.value = _messages.value + chatMsg
         
         val payload = Payload.fromBytes(data.toByteArray())
@@ -194,4 +233,10 @@ package com.servify.resqmesh
     }
 }
 
-data class ChatMessage(val id: String, val sender: String, val content: String, val isEmergency: Boolean)
+data class ChatMessage(
+    val id: String, 
+    val sender: String, 
+    val content: String, 
+    val isEmergency: Boolean,
+    val hops: Int = 0
+)

@@ -15,8 +15,7 @@ import com.servify.resqmesh.ui.theme.OffGridTheme
 class MainActivity : ComponentActivity() {
 
     private val nearbyManager by lazy { 
-        val uniqueId = (1000..9999).random()
-        NearbyManager(this, "${Build.MODEL} (#$uniqueId)") 
+        NearbyManager(this, "") 
     }
 
     private val requestPermissionsLauncher = registerForActivityResult(
@@ -35,9 +34,7 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
 
         setContent {
-            OffGridTheme {
-                OffGridApp(nearbyManager)
-            }
+            OffGridApp(nearbyManager)
         }
     }
 
